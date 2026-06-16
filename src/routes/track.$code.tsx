@@ -171,15 +171,23 @@ function TrackPage() {
                 ))}
               </div>
 
-              <div className="mt-8 grid grid-cols-4 gap-4 border-t border-white/20 pt-5 text-sm">
-                <TicketStat label="Depart" value={data.depart_time} />
-                <TicketStat label="Arrive" value={data.arrival_time} />
-                <TicketStat label="Class" value={data.class} />
-                <TicketStat label="Seat" value={data.seat} />
-                <TicketStat label="Gate" value={data.gate} />
-                <TicketStat label="Duration" value={data.duration} />
-                <TicketStat label="Ticket" value={data.flight_ticket} />
-                <TicketStat label="Code" value={data.tracking_code} mono />
+              <div className="mt-8 flex gap-5 border-t border-white/20 pt-5">
+                <div className="grid flex-1 grid-cols-4 gap-4 text-sm">
+                  <TicketStat label="Depart" value={data.depart_time} />
+                  <TicketStat label="Arrive" value={data.arrival_time} />
+                  <TicketStat label="Class" value={data.class} />
+                  <TicketStat label="Seat" value={data.seat} />
+                  <TicketStat label="Gate" value={data.gate} />
+                  <TicketStat label="Duration" value={data.duration} />
+                  <TicketStat label="Ticket" value={data.flight_ticket} />
+                  <TicketStat label="Code" value={data.tracking_code} mono />
+                </div>
+                {qrDataUrl && (
+                  <div className="flex flex-col items-center justify-center rounded-xl bg-white p-2 text-center">
+                    <img src={qrDataUrl} alt="Scan to track" className="h-24 w-24" />
+                    <div className="mt-1 text-[8px] font-semibold uppercase tracking-widest text-black">Scan to track</div>
+                  </div>
+                )}
               </div>
             </div>
 
