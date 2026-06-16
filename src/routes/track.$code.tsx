@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import QRCode from "qrcode";
 import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,37 @@ type Segment = { from: string; to: string };
 
 export const Route = createFileRoute("/track/$code")({
   component: TrackPage,
+  head: ({ params }) => {
+    const code = params.code?.toUpperCase() ?? "";
+    const title = `Track Flight ${code} — Emirates Flight Tracking`;
+    const description = `Live status, gate, seat, and itinerary for Emirates flight tracking code ${code}. Enter your code to track your flight in real time.`;
+    return {
+      meta: [
+        { title },
+        { name: "description", content: description },
+        { property: "og:title", content: title },
+        { property: "og:description", content: description },
+        { property: "og:type", content: "article" },
+        { property: "og:url", content: `/track/${params.code}` },
+        { name: "twitter:card", content: "summary_large_image" },
+        { name: "twitter:title", content: title },
+        { name: "twitter:description", content: description },
+      ],
+      links: [{ rel: "canonical", href: `/track/${params.code}` }],
+      scripts: [
+        {
+          type: "application/ld+json",
+          children: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "WebPage",
+            name: title,
+            description,
+            url: `/track/${params.code}`,
+          }),
+        },
+      ],
+    };
+  },
 });
 
 function TrackPage() {
@@ -20,6 +52,14 @@ function TrackPage() {
   const ticketRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
   const [printing, setPrinting] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const url = `${window.location.origin}/track/${code}`;
+    QRCode.toDataURL(url, { margin: 1, width: 240, color: { dark: "#000000", light: "#ffffff" } })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(null));
+  }, [code]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["flight", code],
@@ -131,15 +171,23 @@ function TrackPage() {
                 ))}
               </div>
 
-              <div className="mt-8 grid grid-cols-4 gap-4 border-t border-white/20 pt-5 text-sm">
-                <TicketStat label="Depart" value={data.depart_time} />
-                <TicketStat label="Arrive" value={data.arrival_time} />
-                <TicketStat label="Class" value={data.class} />
-                <TicketStat label="Seat" value={data.seat} />
-                <TicketStat label="Gate" value={data.gate} />
-                <TicketStat label="Duration" value={data.duration} />
-                <TicketStat label="Ticket" value={data.flight_ticket} />
-                <TicketStat label="Code" value={data.tracking_code} mono />
+              <div className="mt-8 flex gap-5 border-t border-white/20 pt-5">
+                <div className="grid flex-1 grid-cols-4 gap-4 text-sm">
+                  <TicketStat label="Depart" value={data.depart_time} />
+                  <TicketStat label="Arrive" value={data.arrival_time} />
+                  <TicketStat label="Class" value={data.class} />
+                  <TicketStat label="Seat" value={data.seat} />
+                  <TicketStat label="Gate" value={data.gate} />
+                  <TicketStat label="Duration" value={data.duration} />
+                  <TicketStat label="Ticket" value={data.flight_ticket} />
+                  <TicketStat label="Code" value={data.tracking_code} mono />
+                </div>
+                {qrDataUrl && (
+                  <div className="flex flex-col items-center justify-center rounded-xl bg-white p-2 text-center">
+                    <img src={qrDataUrl} alt="Scan to track" className="h-24 w-24" />
+                    <div className="mt-1 text-[8px] font-semibold uppercase tracking-widest text-black">Scan to track</div>
+                  </div>
+                )}
               </div>
             </div>
 
