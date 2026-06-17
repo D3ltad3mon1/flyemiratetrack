@@ -235,7 +235,9 @@ function AdminPage() {
                     <div className="grid gap-3 sm:grid-cols-2">
                       <Field label="From (IATA)" value={s.from} onChange={(v) => updateSegment(i, { from: v.toUpperCase() })} placeholder="DXB" />
                       <Field label="To (IATA)" value={s.to} onChange={(v) => updateSegment(i, { to: v.toUpperCase() })} placeholder="LHR" />
+                      <Field label="Depart date" type="date" value={s.depart_date ?? ""} onChange={(v) => updateSegment(i, { depart_date: v })} />
                       <Field label="Depart time" value={s.depart_time ?? ""} onChange={(v) => updateSegment(i, { depart_time: v })} placeholder="e.g. 1805" />
+                      <Field label="Arrival date" type="date" value={s.arrival_date ?? ""} onChange={(v) => updateSegment(i, { arrival_date: v })} />
                       <Field label="Arrival time" value={s.arrival_time ?? ""} onChange={(v) => updateSegment(i, { arrival_time: v })} placeholder="e.g. 2245" />
                       <Field label="Boarding at" value={s.boarding_at ?? ""} onChange={(v) => updateSegment(i, { boarding_at: v })} placeholder="e.g. 1705" />
                       <Field label="Gate closes at" value={s.gate_closes_at ?? ""} onChange={(v) => updateSegment(i, { gate_closes_at: v })} placeholder="e.g. 1745" />
