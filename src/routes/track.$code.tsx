@@ -10,7 +10,15 @@ import { Button } from "@/components/ui/button";
 import { Plane, MapPin, Clock, Ticket, DoorOpen, CircleDot, ArrowRight, Download, FileText } from "lucide-react";
 import logoAsset from "@/assets/emirates-logo.png.asset.json";
 
-type Segment = { from: string; to: string };
+type Segment = {
+  from: string;
+  to: string;
+  depart_time?: string;
+  arrival_time?: string;
+  boarding_at?: string;
+  gate_closes_at?: string;
+  seating_zone?: string;
+};
 
 export const Route = createFileRoute("/track/$code")({
   component: TrackPage,
@@ -47,16 +55,27 @@ export const Route = createFileRoute("/track/$code")({
   },
 });
 
+const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+function shortDate(iso?: string) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${String(d.getDate()).padStart(2, "0")}${MONTHS[d.getMonth()]}`;
+}
+function stripColon(t?: string | null) {
+  return (t || "").replace(":", "");
+}
+
 function TrackPage() {
   const { code } = Route.useParams();
-  const ticketRef = useRef<HTMLDivElement>(null);
+  const boardingPassRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const url = `${window.location.origin}/track/${code}`;
-    QRCode.toDataURL(url, { margin: 1, width: 240, color: { dark: "#000000", light: "#ffffff" } })
+    QRCode.toDataURL(url, { margin: 0, width: 240, color: { dark: "#000000", light: "#ffffff" } })
       .then(setQrDataUrl)
       .catch(() => setQrDataUrl(null));
   }, [code]);
@@ -75,16 +94,16 @@ function TrackPage() {
   });
 
   const handleDownloadImage = async () => {
-    if (!ticketRef.current) return;
+    if (!boardingPassRef.current) return;
     setDownloading(true);
     try {
-      const canvas = await html2canvas(ticketRef.current, {
-        backgroundColor: null,
-        scale: 2,
+      const canvas = await html2canvas(boardingPassRef.current, {
+        backgroundColor: "#ffffff",
+        scale: 3,
         useCORS: true,
       });
       const link = document.createElement("a");
-      link.download = `emirates-ticket-${data?.tracking_code}.png`;
+      link.download = `emirates-boarding-pass-${data?.tracking_code}.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
     } finally {
@@ -101,6 +120,9 @@ function TrackPage() {
       setPrinting(false);
     }
   };
+
+  const segments: Segment[] = (data?.segments as Segment[]) || [];
+  const seg0 = segments[0];
 
   return (
     <div className="min-h-screen bg-background">
@@ -132,21 +154,19 @@ function TrackPage() {
 
         {data && (
           <article className="mt-8">
-            <div ref={ticketRef} className="rounded-3xl border bg-gradient-to-br from-primary to-[var(--color-emirates-dark)] p-8 text-primary-foreground shadow-2xl">
+            {/* Visible status card */}
+            <div className="rounded-3xl border bg-gradient-to-br from-primary to-[var(--color-emirates-dark)] p-8 text-primary-foreground shadow-2xl">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
                   <img src={logoAsset.url} alt="Emirates" crossOrigin="anonymous" className="h-12 w-12 rounded bg-white/10 p-1" />
                   <div>
                     <div className="font-display text-lg font-bold">Emirates</div>
-                    <div className="text-[10px] uppercase tracking-[0.25em] opacity-80">Boarding pass</div>
+                    <div className="text-[10px] uppercase tracking-[0.25em] opacity-80">Flight status</div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-xs uppercase tracking-[0.2em] opacity-80">Status</div>
-                  <div className={`mt-2 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${data.flight_started ? "bg-green-500/20 text-white" : "bg-white/15"}`}>
-                    <CircleDot className="h-3 w-3" />
-                    {data.flight_started ? "In flight" : "Scheduled"}
-                  </div>
+                <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${data.flight_started ? "bg-green-500/20 text-white" : "bg-white/15"}`}>
+                  <CircleDot className="h-3 w-3" />
+                  {data.flight_started ? "In flight" : "Scheduled"}
                 </div>
               </div>
 
@@ -156,41 +176,23 @@ function TrackPage() {
               </div>
 
               <div className="mt-8 space-y-5">
-                {((data.segments as unknown as Segment[]) || []).map((s, i) => (
+                {segments.map((s, i) => (
                   <div key={i} className="flex items-center gap-4">
                     <div className="flex-1">
-                      <div className="text-[10px] uppercase tracking-widest opacity-70">From</div>
+                      <div className="text-[10px] uppercase tracking-widest opacity-70">From {s.depart_time ? `· ${s.depart_time}` : ""}</div>
                       <div className="font-display text-2xl font-bold">{s.from}</div>
                     </div>
                     <ArrowRight className="h-6 w-6 opacity-70" />
                     <div className="flex-1 text-right">
-                      <div className="text-[10px] uppercase tracking-widest opacity-70">To</div>
+                      <div className="text-[10px] uppercase tracking-widest opacity-70">To {s.arrival_time ? `· ${s.arrival_time}` : ""}</div>
                       <div className="font-display text-2xl font-bold">{s.to}</div>
                     </div>
                   </div>
                 ))}
               </div>
-
-              <div className="mt-8 flex gap-5 border-t border-white/20 pt-5">
-                <div className="grid flex-1 grid-cols-4 gap-4 text-sm">
-                  <TicketStat label="Depart" value={data.depart_time} />
-                  <TicketStat label="Arrive" value={data.arrival_time} />
-                  <TicketStat label="Class" value={data.class} />
-                  <TicketStat label="Seat" value={data.seat} />
-                  <TicketStat label="Gate" value={data.gate} />
-                  <TicketStat label="Duration" value={data.duration} />
-                  <TicketStat label="Ticket" value={data.flight_ticket} />
-                  <TicketStat label="Code" value={data.tracking_code} mono />
-                </div>
-                {qrDataUrl && (
-                  <div className="flex flex-col items-center justify-center rounded-xl bg-white p-2 text-center">
-                    <img src={qrDataUrl} alt="Scan to track" className="h-24 w-24" />
-                    <div className="mt-1 text-[8px] font-semibold uppercase tracking-widest text-black">Scan to track</div>
-                  </div>
-                )}
-              </div>
             </div>
 
+            {/* Action buttons */}
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <Button onClick={handleDownloadImage} disabled={downloading} size="lg" className="flex-1">
                 <Download className="mr-1" />
@@ -202,6 +204,17 @@ function TrackPage() {
               </Button>
             </div>
 
+            {/* Hidden printable boarding pass — styled to match sample */}
+            <div className="mt-8 overflow-x-auto">
+              <BoardingPass
+                ref={boardingPassRef}
+                data={data}
+                seg={seg0}
+                qrDataUrl={qrDataUrl}
+              />
+            </div>
+
+            {/* Details grid */}
             <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <Info icon={Clock} label="Departs" value={data.depart_time} />
               <Info icon={Clock} label="Arrives" value={data.arrival_time} />
@@ -219,14 +232,120 @@ function TrackPage() {
   );
 }
 
-function TicketStat({ label, value, mono }: { label: string; value: string | null | undefined; mono?: boolean }) {
+const BoardingPass = ({ ref, data, seg, qrDataUrl }: any) => {
+  const className = (data.class || "Economy").toUpperCase();
+  const flightNo = data.flight_ticket || "—";
+  const dateShort = shortDate(data.flight_date);
+  const seg0: Segment | undefined = seg;
+  const fromIATA = seg0?.from || "—";
+  const toIATA = seg0?.to || "—";
+  const cityName = (seg0?.to || data.passenger_name || "").toUpperCase();
+  const boardingAt = stripColon(seg0?.boarding_at) || stripColon(data.depart_time);
+  const gateClosesAt = stripColon(seg0?.gate_closes_at);
+  const departure = stripColon(seg0?.depart_time) || stripColon(data.depart_time);
+  const seat = data.seat || "—";
+  const zone = seg0?.seating_zone || "C";
+  const gate = data.gate || "—";
+
   return (
-    <div>
-      <div className="text-[9px] uppercase tracking-widest opacity-70">{label}</div>
-      <div className={`mt-1 font-semibold ${mono ? "font-mono text-xs" : "text-sm"}`}>{value || "—"}</div>
+    <div ref={ref} className="mx-auto bg-white text-black" style={{ width: 980, fontFamily: "Arial, Helvetica, sans-serif" }}>
+      <div className="flex" style={{ minHeight: 360 }}>
+        {/* MAIN STUB */}
+        <div className="relative flex-1 p-6">
+          {/* top row */}
+          <div className="flex items-start gap-4">
+            <div className="flex h-16 w-16 items-center justify-center bg-[#d71921]">
+              <img src={logoAsset.url} alt="Emirates" crossOrigin="anonymous" className="h-12 w-12 object-contain" />
+            </div>
+            <div className="text-[36px] font-black leading-none tracking-tight">{className}</div>
+            <div className="ml-auto text-right">
+              <div className="text-[18px] font-semibold tracking-[0.2em]">BOARDING PASS</div>
+            </div>
+          </div>
+
+          {/* ref code */}
+          <div className="mt-6 text-[13px] tracking-wide">EK-{(data.tracking_code || "").toUpperCase()}</div>
+
+          {/* divider */}
+          <div className="mt-3 border-t-2 border-black" />
+
+          {/* city / flight / date row */}
+          <div className="mt-4 grid grid-cols-12 items-end gap-4">
+            <div className="col-span-5 text-[32px] font-bold leading-none">{cityName}</div>
+            <div className="col-span-3 text-[24px] font-bold leading-none">{flightNo}</div>
+            <div className="col-span-4 text-[24px] font-bold leading-none">{dateShort}</div>
+          </div>
+
+          {/* labels row */}
+          <div className="mt-6 grid grid-cols-5 gap-4 text-[11px]">
+            <div>Gate</div>
+            <div>Boarding at</div>
+            <div>Gate closes at</div>
+            <div>Seat</div>
+            <div>Seating Zone</div>
+          </div>
+          {/* values row */}
+          <div className="mt-1 grid grid-cols-5 gap-4 text-[34px] font-black leading-none">
+            <div>{gate}</div>
+            <div>{boardingAt || "—"}</div>
+            <div>{gateClosesAt || "—"}</div>
+            <div>{seat}</div>
+            <div>{zone}</div>
+          </div>
+
+          <div className="mt-6 border-t-2 border-black" />
+
+          <div className="mt-3 flex justify-between text-[11px]">
+            <div>{(data.tracking_code || "").toUpperCase()}-1</div>
+            <div>Seq 413</div>
+          </div>
+        </div>
+
+        {/* perforation */}
+        <div className="flex flex-col items-center justify-center px-2" style={{ borderLeft: "2px dashed #999" }} />
+
+        {/* QR / barcode */}
+        <div className="flex items-center justify-center p-4" style={{ minWidth: 150 }}>
+          {qrDataUrl ? (
+            <img src={qrDataUrl} alt="Scan" className="h-32 w-32" />
+          ) : (
+            <div className="h-32 w-32 bg-black/10" />
+          )}
+        </div>
+
+        {/* DETACHABLE STUB */}
+        <div className="p-6" style={{ width: 280, borderLeft: "2px dashed #999" }}>
+          <div className="flex items-start gap-3">
+            <div className="flex h-12 w-12 items-center justify-center bg-[#d71921]">
+              <img src={logoAsset.url} alt="Emirates" crossOrigin="anonymous" className="h-10 w-10 object-contain" />
+            </div>
+            <div className="text-[22px] font-black leading-none">{className}</div>
+          </div>
+
+          <div className="mt-6 flex justify-between text-[18px] font-bold">
+            <div>{flightNo}</div>
+            <div>{dateShort}</div>
+          </div>
+
+          <div className="mt-4 text-[18px] font-bold">{fromIATA} - {toIATA}</div>
+
+          <div className="mt-6 grid grid-cols-3 gap-2 text-[10px]">
+            <div>Departure</div>
+            <div>Seat</div>
+            <div>Seating Zone</div>
+          </div>
+          <div className="mt-1 grid grid-cols-3 gap-2 text-[24px] font-black leading-none">
+            <div>{departure || "—"}</div>
+            <div>{seat}</div>
+            <div>{zone}</div>
+          </div>
+
+          <div className="mt-10 text-[11px]">Seq 413</div>
+        </div>
+      </div>
     </div>
   );
-}
+};
 
 function Info({ icon: Icon, label, value, mono }: { icon: any; label: string; value: string | null | undefined; mono?: boolean }) {
   return (
@@ -256,7 +375,6 @@ async function generateBookingPdf(data: any) {
   const margin = 40;
   let y = margin;
 
-  // Logo
   try {
     const logo = await loadImageDataUrl(logoAsset.url);
     doc.addImage(logo, "PNG", margin, y, 50, 50);
@@ -272,18 +390,15 @@ async function generateBookingPdf(data: any) {
 
   doc.setTextColor(0);
   doc.setFontSize(9);
-  const bookedOn = `Booked On: ${new Date().toDateString()}`;
-  doc.text(bookedOn, pageW - margin, y + 22, { align: "right" });
+  doc.text(`Booked On: ${new Date().toDateString()}`, pageW - margin, y + 22, { align: "right" });
 
   y += 70;
 
-  // Title
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
   doc.text("Booking Acknowledgement", margin, y);
   y += 22;
 
-  // Notice strip
   doc.setFillColor(255, 247, 237);
   doc.setDrawColor(251, 191, 36);
   doc.roundedRect(margin, y, pageW - margin * 2, 32, 4, 4, "FD");
@@ -298,7 +413,6 @@ async function generateBookingPdf(data: any) {
   doc.setTextColor(0);
   y += 50;
 
-  // Flight Details header
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
   doc.text("Flight Details", margin, y);
@@ -307,7 +421,6 @@ async function generateBookingPdf(data: any) {
   doc.line(margin, y, pageW - margin, y);
   y += 18;
 
-  // Departing flight box
   doc.setFontSize(12);
   doc.text("Departing Flight", margin, y);
   y += 18;
@@ -316,7 +429,6 @@ async function generateBookingPdf(data: any) {
   const flightDate = new Date(data.flight_date).toDateString();
 
   segments.forEach((seg, idx) => {
-    // Box
     const boxTop = y;
     doc.setDrawColor(220);
     doc.roundedRect(margin, boxTop, pageW - margin * 2, 110, 4, 4, "S");
@@ -331,11 +443,10 @@ async function generateBookingPdf(data: any) {
     doc.text("Nonstop  |  " + (data.class || "Economy"), margin + 12, boxTop + 46);
     doc.setTextColor(0);
 
-    // Route columns
     const colY = boxTop + 66;
     const col1 = margin + 12;
     const col2 = margin + (pageW - margin * 2) / 2 - 20;
-    const col3 = pageW - margin - 90;
+    const col3 = pageW - margin - 110;
 
     doc.setFontSize(8);
     doc.setTextColor(110);
@@ -344,11 +455,10 @@ async function generateBookingPdf(data: any) {
     doc.setTextColor(0);
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text(`${seg.from} - ${data.depart_time || ""}`, col1, colY + 18);
-    doc.text(`${seg.to} - ${data.arrival_time || ""}`, col3, colY + 18);
+    doc.setFontSize(13);
+    doc.text(`${seg.from} - ${seg.depart_time || data.depart_time || ""}`, col1, colY + 18);
+    doc.text(`${seg.to} - ${seg.arrival_time || data.arrival_time || ""}`, col3, colY + 18);
 
-    // Middle: travel time
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(110);
@@ -373,7 +483,6 @@ async function generateBookingPdf(data: any) {
 
   y += 20;
 
-  // Traveler Information
   if (y > 680) { doc.addPage(); y = margin; }
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
@@ -382,7 +491,6 @@ async function generateBookingPdf(data: any) {
   doc.line(margin, y, pageW - margin, y);
   y += 20;
 
-  // Table
   const colWidths = [80, 140, 100, 80, 80];
   const headers = ["E-Ticket", "Passenger Name", "Tracking Code", "Seat", "Gate"];
   let x = margin;
@@ -411,7 +519,7 @@ async function generateBookingPdf(data: any) {
   });
   y += 24;
 
-  // Billing
+  // Billing — uses amount from DB
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
   doc.text("Billing Details (USD)", margin, y);
@@ -419,12 +527,15 @@ async function generateBookingPdf(data: any) {
   doc.line(margin, y, pageW - margin, y);
   y += 20;
 
+  const amount = Number(data.amount ?? 0);
+  const amountStr = `$${amount.toFixed(2)}`;
+
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   const rows: [string, string][] = [
-    ["1 Adult Ticket", "$366.00"],
-    ["Subtotal", "$366.00"],
-    ["Flight Total", "$366.00"],
+    ["1 Adult Ticket", amountStr],
+    ["Subtotal", amountStr],
+    ["Flight Total", amountStr],
   ];
   rows.forEach(([k, v]) => {
     doc.text(k, margin, y);
@@ -435,7 +546,7 @@ async function generateBookingPdf(data: any) {
   y += 8;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(13);
-  doc.text("Total Charge: $366.00", margin, y);
+  doc.text(`Total Charge: ${amountStr}`, margin, y);
   y += 24;
 
   doc.setFont("helvetica", "normal");
