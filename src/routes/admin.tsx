@@ -13,7 +13,9 @@ export const Route = createFileRoute("/admin")({
 type Segment = {
   from: string;
   to: string;
+  depart_date?: string;
   depart_time?: string;
+  arrival_date?: string;
   arrival_time?: string;
   boarding_at?: string;
   gate_closes_at?: string;
