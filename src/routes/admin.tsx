@@ -38,7 +38,7 @@ type FlightRow = {
   amount: number | null;
 };
 
-const emptySegment: Segment = { from: "", to: "", depart_time: "", arrival_time: "", boarding_at: "", gate_closes_at: "", seating_zone: "" };
+const emptySegment: Segment = { from: "", to: "", depart_date: "", depart_time: "", arrival_date: "", arrival_time: "", boarding_at: "", gate_closes_at: "", seating_zone: "" };
 
 const emptyForm = {
   tracking_code: "",
