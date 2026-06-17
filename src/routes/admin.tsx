@@ -10,7 +10,15 @@ export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
-type Segment = { from: string; to: string };
+type Segment = {
+  from: string;
+  to: string;
+  depart_time?: string;
+  arrival_time?: string;
+  boarding_at?: string;
+  gate_closes_at?: string;
+  seating_zone?: string;
+};
 type FlightRow = {
   id: string;
   tracking_code: string;
@@ -25,14 +33,17 @@ type FlightRow = {
   seat: string | null;
   gate: string | null;
   flight_started: boolean;
+  amount: number | null;
 };
+
+const emptySegment: Segment = { from: "", to: "", depart_time: "", arrival_time: "", boarding_at: "", gate_closes_at: "", seating_zone: "" };
 
 const emptyForm = {
   tracking_code: "",
   passenger_name: "",
   flight_date: "",
   flight_ticket: "",
-  segments: [{ from: "", to: "" }] as Segment[],
+  segments: [{ ...emptySegment }] as Segment[],
   depart_time: "",
   arrival_time: "",
   duration: "",
@@ -40,6 +51,7 @@ const emptyForm = {
   seat: "",
   gate: "",
   flight_started: false,
+  amount: "",
 };
 
 function AdminPage() {
@@ -88,7 +100,9 @@ function AdminPage() {
       passenger_name: f.passenger_name,
       flight_date: f.flight_date,
       flight_ticket: f.flight_ticket ?? "",
-      segments: Array.isArray(f.segments) && f.segments.length ? f.segments : [{ from: "", to: "" }],
+      segments: Array.isArray(f.segments) && f.segments.length
+        ? f.segments.map((s) => ({ ...emptySegment, ...s }))
+        : [{ ...emptySegment }],
       depart_time: f.depart_time ?? "",
       arrival_time: f.arrival_time ?? "",
       duration: f.duration ?? "",
@@ -96,9 +110,16 @@ function AdminPage() {
       seat: f.seat ?? "",
       gate: f.gate ?? "",
       flight_started: f.flight_started,
+      amount: f.amount != null ? String(f.amount) : "",
     });
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const updateSegment = (i: number, patch: Partial<Segment>) => {
+    const segments = [...form.segments];
+    segments[i] = { ...segments[i], ...patch };
+    setForm({ ...form, segments });
   };
 
   const save = async (e: React.FormEvent) => {
@@ -118,6 +139,7 @@ function AdminPage() {
         seat: form.seat || null,
         gate: form.gate || null,
         flight_started: form.flight_started,
+        amount: form.amount ? Number(form.amount) : null,
       };
       if (editing) {
         const { error } = await supabase.from("flights").update(payload).eq("id", editing);
@@ -184,32 +206,39 @@ function AdminPage() {
               <Field label="Passenger name" value={form.passenger_name} onChange={(v) => setForm({ ...form, passenger_name: v })} required />
               <Field label="Date of flight" type="date" value={form.flight_date} onChange={(v) => setForm({ ...form, flight_date: v })} required />
               <Field label="Tracking code" value={form.tracking_code} onChange={(v) => setForm({ ...form, tracking_code: v.toUpperCase() })} required />
-              <Field label="Flight ticket" value={form.flight_ticket} onChange={(v) => setForm({ ...form, flight_ticket: v })} />
-              <Field label="Time of depart" value={form.depart_time} onChange={(v) => setForm({ ...form, depart_time: v })} placeholder="e.g. 14:30" />
-              <Field label="Time of arrival" value={form.arrival_time} onChange={(v) => setForm({ ...form, arrival_time: v })} placeholder="e.g. 21:45" />
+              <Field label="Flight ticket" value={form.flight_ticket} onChange={(v) => setForm({ ...form, flight_ticket: v })} placeholder="e.g. EK210" />
+              <Field label="Overall depart time" value={form.depart_time} onChange={(v) => setForm({ ...form, depart_time: v })} placeholder="e.g. 14:30" />
+              <Field label="Overall arrival time" value={form.arrival_time} onChange={(v) => setForm({ ...form, arrival_time: v })} placeholder="e.g. 21:45" />
               <Field label="Duration" value={form.duration} onChange={(v) => setForm({ ...form, duration: v })} placeholder="e.g. 7h 15m" />
               <Field label="Class" value={form.class} onChange={(v) => setForm({ ...form, class: v })} placeholder="Economy / Business / First" />
-              <Field label="Seat" value={form.seat} onChange={(v) => setForm({ ...form, seat: v })} />
-              <Field label="Gate" value={form.gate} onChange={(v) => setForm({ ...form, gate: v })} />
+              <Field label="Seat" value={form.seat} onChange={(v) => setForm({ ...form, seat: v })} placeholder="e.g. 45K" />
+              <Field label="Gate" value={form.gate} onChange={(v) => setForm({ ...form, gate: v })} placeholder="e.g. A08" />
+              <Field label="Amount (USD)" type="number" value={form.amount} onChange={(v) => setForm({ ...form, amount: v })} placeholder="e.g. 366.00" />
             </div>
 
             <div className="mt-6">
               <div className="mb-2 flex items-center justify-between">
-                <label className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Segments (From → To)</label>
-                <button type="button" onClick={() => setForm({ ...form, segments: [...form.segments, { from: "", to: "" }] })} className="text-xs font-semibold text-primary hover:underline">+ Add segment</button>
+                <label className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Segments</label>
+                <button type="button" onClick={() => setForm({ ...form, segments: [...form.segments, { ...emptySegment }] })} className="text-xs font-semibold text-primary hover:underline">+ Add segment</button>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-4">
                 {form.segments.map((s, i) => (
-                  <div key={i} className="flex gap-2">
-                    <input className="flex-1 rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-primary/40" placeholder="From (e.g. DXB)" value={s.from} onChange={(e) => {
-                      const segments = [...form.segments]; segments[i] = { ...s, from: e.target.value }; setForm({ ...form, segments });
-                    }} />
-                    <input className="flex-1 rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-primary/40" placeholder="To (e.g. LHR)" value={s.to} onChange={(e) => {
-                      const segments = [...form.segments]; segments[i] = { ...s, to: e.target.value }; setForm({ ...form, segments });
-                    }} />
-                    {form.segments.length > 1 && (
-                      <button type="button" onClick={() => setForm({ ...form, segments: form.segments.filter((_, j) => j !== i) })} className="rounded-lg border px-3 hover:bg-accent"><Trash2 className="h-4 w-4" /></button>
-                    )}
+                  <div key={i} className="rounded-xl border bg-background p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Segment {i + 1}</span>
+                      {form.segments.length > 1 && (
+                        <button type="button" onClick={() => setForm({ ...form, segments: form.segments.filter((_, j) => j !== i) })} className="rounded-lg border px-2 py-1 text-xs hover:bg-accent inline-flex items-center gap-1"><Trash2 className="h-3 w-3" /> Remove</button>
+                      )}
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field label="From (IATA)" value={s.from} onChange={(v) => updateSegment(i, { from: v.toUpperCase() })} placeholder="DXB" />
+                      <Field label="To (IATA)" value={s.to} onChange={(v) => updateSegment(i, { to: v.toUpperCase() })} placeholder="LHR" />
+                      <Field label="Depart time" value={s.depart_time ?? ""} onChange={(v) => updateSegment(i, { depart_time: v })} placeholder="e.g. 1805" />
+                      <Field label="Arrival time" value={s.arrival_time ?? ""} onChange={(v) => updateSegment(i, { arrival_time: v })} placeholder="e.g. 2245" />
+                      <Field label="Boarding at" value={s.boarding_at ?? ""} onChange={(v) => updateSegment(i, { boarding_at: v })} placeholder="e.g. 1705" />
+                      <Field label="Gate closes at" value={s.gate_closes_at ?? ""} onChange={(v) => updateSegment(i, { gate_closes_at: v })} placeholder="e.g. 1745" />
+                      <Field label="Seating zone" value={s.seating_zone ?? ""} onChange={(v) => updateSegment(i, { seating_zone: v })} placeholder="e.g. C" />
+                    </div>
                   </div>
                 ))}
               </div>
