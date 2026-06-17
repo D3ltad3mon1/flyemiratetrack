@@ -1,0 +1,1 @@
+ALTER TABLE public.flights ADD COLUMN IF NOT EXISTS amount NUMERIC(10,2);

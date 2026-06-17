@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       flights: {
         Row: {
+          amount: number | null
           arrival_time: string | null
           class: string | null
           created_at: string
@@ -33,6 +34,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          amount?: number | null
           arrival_time?: string | null
           class?: string | null
           created_at?: string
@@ -50,6 +52,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          amount?: number | null
           arrival_time?: string | null
           class?: string | null
           created_at?: string
