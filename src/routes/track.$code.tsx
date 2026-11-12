@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import html2canvas from "html2canvas";
+import { toJpeg } from "html-to-image";
 import jsPDF from "jspdf";
 import QRCode from "qrcode";
 import { supabase } from "@/integrations/supabase/client";
@@ -103,22 +103,18 @@ function TrackPage() {
     setDownloading(true);
     setDownloadError(null);
     try {
-      const canvas = await html2canvas(boardingPassRef.current, {
+      // html-to-image, not html2canvas: the old library cannot read the
+      // site's modern (oklch) colours and always failed on this card.
+      // toJpeg lets the browser itself render the card, as a JPG photo.
+      const dataUrl = await toJpeg(boardingPassRef.current, {
+        quality: 0.95,
+        pixelRatio: 3,
         backgroundColor: "#ffffff",
-        scale: 3,
-        useCORS: true,
       });
-      // JPG, as the ticket is a photo-style download.
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob((b) => resolve(b), "image/jpeg", 0.95),
-      );
-      if (!blob) throw new Error("Could not create the image file.");
-      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.download = `emirates-boarding-pass-${data?.tracking_code}.jpg`;
-      link.href = url;
+      link.href = dataUrl;
       link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
     } catch (err) {
       console.error("Ticket download failed:", err);
       setDownloadError("The ticket could not be downloaded. Please try again.");
