@@ -2,9 +2,26 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 import { Header } from "@/components/Header";
 import { Plus, Trash2, Edit3, X, LogOut } from "lucide-react";
+import {
+  buildSegmentsPayload,
+  CURRENCIES,
+  FLIGHT_TYPE_LABEL,
+  formatAmount,
+  formatFlightDate,
+  readFlightMeta,
+  readSegments,
+  type FlightType,
+} from "@/lib/flight-utils";
+import {
+  COUNTRIES,
+  airportLabel,
+  findAirportByIata,
+  getAirportsByCountry,
+} from "@/lib/airports";
 
 export const Route = createFileRoute("/admin")({
   component: AdminPage,
@@ -13,6 +30,8 @@ export const Route = createFileRoute("/admin")({
 type Segment = {
   from: string;
   to: string;
+  from_country?: string;
+  to_country?: string;
   depart_date?: string;
   depart_time?: string;
   arrival_date?: string;
@@ -27,7 +46,7 @@ type FlightRow = {
   passenger_name: string;
   flight_date: string;
   flight_ticket: string | null;
-  segments: Segment[];
+  segments: unknown;
   depart_time: string | null;
   arrival_time: string | null;
   duration: string | null;
@@ -38,7 +57,7 @@ type FlightRow = {
   amount: number | null;
 };
 
-const emptySegment: Segment = { from: "", to: "", depart_date: "", depart_time: "", arrival_date: "", arrival_time: "", boarding_at: "", gate_closes_at: "", seating_zone: "" };
+const emptySegment: Segment = { from: "", to: "", from_country: "", to_country: "", depart_date: "", depart_time: "", arrival_date: "", arrival_time: "", boarding_at: "", gate_closes_at: "", seating_zone: "" };
 
 const emptyForm = {
   tracking_code: "",
@@ -54,6 +73,8 @@ const emptyForm = {
   gate: "",
   flight_started: false,
   amount: "",
+  flight_type: "human" as FlightType,
+  currency: "USD",
 };
 
 function AdminPage() {
@@ -97,13 +118,21 @@ function AdminPage() {
 
   const startEdit = (f: FlightRow) => {
     setEditing(f.id);
+    const meta = readFlightMeta(f.segments);
+    const segs = readSegments(f.segments);
     setForm({
       tracking_code: f.tracking_code,
       passenger_name: f.passenger_name,
       flight_date: f.flight_date,
       flight_ticket: f.flight_ticket ?? "",
-      segments: Array.isArray(f.segments) && f.segments.length
-        ? f.segments.map((s) => ({ ...emptySegment, ...s }))
+      segments: segs.length
+        ? segs.map((s) => {
+            const seg = { ...emptySegment, ...s };
+            // Backfill the country for each airport code so the pickers reopen correctly.
+            if (!seg.from_country && seg.from) seg.from_country = findAirportByIata(seg.from)?.country ?? "";
+            if (!seg.to_country && seg.to) seg.to_country = findAirportByIata(seg.to)?.country ?? "";
+            return seg;
+          })
         : [{ ...emptySegment }],
       depart_time: f.depart_time ?? "",
       arrival_time: f.arrival_time ?? "",
@@ -113,6 +142,8 @@ function AdminPage() {
       gate: f.gate ?? "",
       flight_started: f.flight_started,
       amount: f.amount != null ? String(f.amount) : "",
+      flight_type: meta.flight_type,
+      currency: meta.currency,
     });
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -133,7 +164,13 @@ function AdminPage() {
         passenger_name: form.passenger_name.trim(),
         flight_date: form.flight_date,
         flight_ticket: form.flight_ticket || null,
-        segments: form.segments.filter((s) => s.from || s.to),
+        // Flight type + currency travel inside the segments JSONB value
+        // (see buildSegmentsPayload) — the flights table has no columns for them.
+        segments: buildSegmentsPayload(
+          form.segments.filter((s) => s.from || s.to),
+          form.flight_type,
+          form.currency,
+        ) as Json,
         depart_time: form.depart_time || null,
         arrival_time: form.arrival_time || null,
         duration: form.duration || null,
@@ -176,6 +213,9 @@ function AdminPage() {
 
   if (!authed) return null;
 
+  const humanFlights = flights.filter((f) => readFlightMeta(f.segments).flight_type === "human");
+  const animalFlights = flights.filter((f) => readFlightMeta(f.segments).flight_type === "animal");
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -204,6 +244,20 @@ function AdminPage() {
               <button type="button" onClick={reset} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
             </div>
 
+            <div className="mt-6">
+              <label className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Flight type</label>
+              <div className="mt-2 flex gap-2">
+                {(["human", "animal"] as const).map((v) => {
+                  const active = form.flight_type === v;
+                  return (
+                    <button key={v} type="button" onClick={() => setForm({ ...form, flight_type: v })} className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${active ? "bg-primary text-primary-foreground" : "border hover:bg-accent"}`}>
+                      {FLIGHT_TYPE_LABEL[v]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
               <Field label="Passenger name" value={form.passenger_name} onChange={(v) => setForm({ ...form, passenger_name: v })} required />
               <Field label="Date of flight" type="date" value={form.flight_date} onChange={(v) => setForm({ ...form, flight_date: v })} required />
@@ -215,7 +269,13 @@ function AdminPage() {
               <Field label="Class" value={form.class} onChange={(v) => setForm({ ...form, class: v })} placeholder="Economy / Business / First" />
               <Field label="Seat" value={form.seat} onChange={(v) => setForm({ ...form, seat: v })} placeholder="e.g. 45K" />
               <Field label="Gate" value={form.gate} onChange={(v) => setForm({ ...form, gate: v })} placeholder="e.g. A08" />
-              <Field label="Amount (USD)" type="number" value={form.amount} onChange={(v) => setForm({ ...form, amount: v })} placeholder="e.g. 366.00" />
+              <Field label="Amount" type="number" value={form.amount} onChange={(v) => setForm({ ...form, amount: v })} placeholder="e.g. 366.00" />
+              <SelectField
+                label="Currency"
+                value={form.currency}
+                onChange={(v) => setForm({ ...form, currency: v })}
+                options={CURRENCIES.map((c) => ({ value: c.code, label: c.name }))}
+              />
             </div>
 
             <div className="mt-6">
@@ -225,7 +285,7 @@ function AdminPage() {
               </div>
               <div className="space-y-4">
                 {form.segments.map((s, i) => (
-                  <div key={i} className="rounded-xl border bg-background p-4">
+                  <div key={`${editing ?? "new"}-${i}`} className="rounded-xl border bg-background p-4">
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Segment {i + 1}</span>
                       {form.segments.length > 1 && (
@@ -233,8 +293,20 @@ function AdminPage() {
                       )}
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <Field label="From (IATA)" value={s.from} onChange={(v) => updateSegment(i, { from: v.toUpperCase() })} placeholder="DXB" />
-                      <Field label="To (IATA)" value={s.to} onChange={(v) => updateSegment(i, { to: v.toUpperCase() })} placeholder="LHR" />
+                      <AirportField
+                        label="From"
+                        code={s.from}
+                        country={s.from_country ?? ""}
+                        onCountry={(c) => updateSegment(i, { from_country: c, from: "" })}
+                        onCode={(v) => updateSegment(i, { from: v.toUpperCase() })}
+                      />
+                      <AirportField
+                        label="To"
+                        code={s.to}
+                        country={s.to_country ?? ""}
+                        onCountry={(c) => updateSegment(i, { to_country: c, to: "" })}
+                        onCode={(v) => updateSegment(i, { to: v.toUpperCase() })}
+                      />
                       <Field label="Depart date" type="date" value={s.depart_date ?? ""} onChange={(v) => updateSegment(i, { depart_date: v })} />
                       <Field label="Depart time" value={s.depart_time ?? ""} onChange={(v) => updateSegment(i, { depart_time: v })} placeholder="e.g. 1805" />
                       <Field label="Arrival date" type="date" value={s.arrival_date ?? ""} onChange={(v) => updateSegment(i, { arrival_date: v })} />
@@ -272,30 +344,48 @@ function AdminPage() {
         )}
 
         <div className="mt-10">
-          <h2 className="text-lg font-semibold">All flights</h2>
-          {flights.length === 0 ? (
-            <div className="mt-4 rounded-2xl border bg-card p-10 text-center text-muted-foreground">No flights yet.</div>
-          ) : (
-            <ul className="mt-4 space-y-3">
-              {flights.map((f) => (
-                <li key={f.id} className="flex items-center justify-between rounded-2xl border bg-card p-4">
-                  <div>
-                    <div className="font-mono text-sm text-primary">{f.tracking_code}</div>
-                    <div className="mt-0.5 font-semibold">{f.passenger_name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {(f.segments as Segment[] | null)?.map((s) => `${s.from}→${s.to}`).join(" • ") || "—"} · {new Date(f.flight_date).toDateString()} · {f.flight_started ? "In flight" : "Scheduled"}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => startEdit(f)} className="rounded-lg border p-2 hover:bg-accent"><Edit3 className="h-4 w-4" /></button>
-                    <button onClick={() => remove(f.id)} className="rounded-lg border p-2 hover:bg-accent"><Trash2 className="h-4 w-4 text-destructive" /></button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+          <FlightGroup title="Flights for Humans" flights={humanFlights} onEdit={startEdit} onRemove={remove} />
+          <FlightGroup title="Flights for Animals" flights={animalFlights} onEdit={startEdit} onRemove={remove} />
         </div>
       </div>
+    </div>
+  );
+}
+
+function FlightGroup({ title, flights, onEdit, onRemove }: {
+  title: string;
+  flights: FlightRow[];
+  onEdit: (f: FlightRow) => void;
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <div className="mt-8">
+      <h2 className="text-lg font-semibold">{title} <span className="text-sm font-normal text-muted-foreground">({flights.length})</span></h2>
+      {flights.length === 0 ? (
+        <div className="mt-4 rounded-2xl border bg-card p-10 text-center text-muted-foreground">No flights yet.</div>
+      ) : (
+        <ul className="mt-4 space-y-3">
+          {flights.map((f) => {
+            const meta = readFlightMeta(f.segments);
+            return (
+            <li key={f.id} className="flex items-center justify-between rounded-2xl border bg-card p-4">
+              <div>
+                <div className="font-mono text-sm text-primary">{f.tracking_code}</div>
+                <div className="mt-0.5 font-semibold">{f.passenger_name}</div>
+                <div className="text-xs text-muted-foreground">
+                  {readSegments(f.segments).map((s) => `${s.from}→${s.to}`).join(" • ") || "—"} · {formatFlightDate(f.flight_date)} · {f.flight_started ? "In flight" : "Scheduled"}
+                  {f.amount != null && <> · {formatAmount(f.amount, meta.currency)}</>}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => onEdit(f)} className="rounded-lg border p-2 hover:bg-accent"><Edit3 className="h-4 w-4" /></button>
+                <button onClick={() => onRemove(f.id)} className="rounded-lg border p-2 hover:bg-accent"><Trash2 className="h-4 w-4 text-destructive" /></button>
+              </div>
+            </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
@@ -314,6 +404,87 @@ function Field({ label, value, onChange, type = "text", required, placeholder }:
         onChange={(e) => onChange(e.target.value)}
         className="mt-1 w-full rounded-lg border bg-background px-3 py-2.5 outline-none focus:ring-2 focus:ring-primary/40"
       />
+    </div>
+  );
+}
+
+function SelectField({ label, value, onChange, options }: {
+  label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[];
+}) {
+  return (
+    <div>
+      <label className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{label}</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="mt-1 w-full rounded-lg border bg-background px-3 py-2.5 outline-none focus:ring-2 focus:ring-primary/40"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function AirportField({ label, code, country, onCountry, onCode }: {
+  label: string;
+  code: string;
+  country: string;
+  onCountry: (country: string) => void;
+  onCode: (code: string) => void;
+}) {
+  const [manual, setManual] = useState(code !== "" && !findAirportByIata(code));
+  const airports = country ? getAirportsByCountry(country) : [];
+  const resolved = findAirportByIata(code);
+
+  return (
+    <div>
+      <label className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{label} — country</label>
+      <select
+        value={country}
+        onChange={(e) => { setManual(false); onCountry(e.target.value); }}
+        className="mt-1 w-full rounded-lg border bg-background px-3 py-2.5 outline-none focus:ring-2 focus:ring-primary/40"
+      >
+        <option value="">Select a country…</option>
+        {COUNTRIES.map((c) => (
+          <option key={c.code} value={c.code}>{c.name}</option>
+        ))}
+      </select>
+
+      <label className="mt-3 block text-xs font-medium uppercase tracking-widest text-muted-foreground">{label} — airport</label>
+      {manual ? (
+        <div className="mt-1 flex gap-2">
+          <input
+            value={code}
+            placeholder="Type IATA code, e.g. LOS"
+            onChange={(e) => onCode(e.target.value)}
+            className="w-full rounded-lg border bg-background px-3 py-2.5 outline-none focus:ring-2 focus:ring-primary/40"
+          />
+          <button type="button" onClick={() => setManual(false)} className="shrink-0 rounded-lg border px-3 text-xs hover:bg-accent">List</button>
+        </div>
+      ) : (
+        <select
+          value={code}
+          disabled={!country}
+          onChange={(e) => {
+            if (e.target.value === "__other") setManual(true);
+            else onCode(e.target.value);
+          }}
+          className="mt-1 w-full rounded-lg border bg-background px-3 py-2.5 outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50"
+        >
+          <option value="">{country ? "Select an airport…" : "Pick a country first"}</option>
+          {airports.map((a) => (
+            <option key={a.code} value={a.code}>
+              {a.name} ({a.code}){a.city ? ` — ${a.city}` : ""}
+            </option>
+          ))}
+          {country && <option value="__other">Other — type the code manually</option>}
+        </select>
+      )}
+      {code && (
+        <p className="mt-1 text-xs text-muted-foreground">{resolved ? airportLabel(code) : `Airport code ${code.toUpperCase()}`}</p>
+      )}
     </div>
   );
 }

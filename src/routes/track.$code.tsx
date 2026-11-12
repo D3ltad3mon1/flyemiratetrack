@@ -9,11 +9,22 @@ import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Plane, MapPin, Clock, Ticket, DoorOpen, CircleDot, ArrowRight, Download, FileText } from "lucide-react";
 import logoAsset from "@/assets/emirates-logo.png.asset.json";
+import {
+  FLIGHT_TYPE_TRAVEL_LABEL,
+  formatAmount,
+  formatFlightDate,
+  readFlightMeta,
+  readSegments,
+  shortFlightDate,
+} from "@/lib/flight-utils";
+import { airportLabel, findAirportByIata } from "@/lib/airports";
 
 type Segment = {
   from: string;
   to: string;
+  depart_date?: string;
   depart_time?: string;
+  arrival_date?: string;
   arrival_time?: string;
   boarding_at?: string;
   gate_closes_at?: string;
@@ -55,13 +66,6 @@ export const Route = createFileRoute("/track/$code")({
   },
 });
 
-const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-function shortDate(iso?: string) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return `${String(d.getDate()).padStart(2, "0")}${MONTHS[d.getMonth()]}`;
-}
 function stripColon(t?: string | null) {
   return (t || "").replace(":", "");
 }
@@ -121,8 +125,11 @@ function TrackPage() {
     }
   };
 
-  const segments: Segment[] = (data?.segments as Segment[]) || [];
+  const segments: Segment[] = readSegments(data?.segments);
   const seg0 = segments[0];
+  const flightMeta = readFlightMeta(data?.segments);
+  const flightType = flightMeta.flight_type;
+  const typeLabel = FLIGHT_TYPE_TRAVEL_LABEL[flightType];
 
   return (
     <div className="min-h-screen bg-background">
@@ -164,15 +171,20 @@ function TrackPage() {
                     <div className="text-[10px] uppercase tracking-[0.25em] opacity-80">Flight status</div>
                   </div>
                 </div>
-                <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${data.flight_started ? "bg-green-500/20 text-white" : "bg-white/15"}`}>
-                  <CircleDot className="h-3 w-3" />
-                  {data.flight_started ? "In flight" : "Scheduled"}
+                <div className="flex flex-col items-end gap-2">
+                  <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${data.flight_started ? "bg-green-500/20 text-white" : "bg-white/15"}`}>
+                    <CircleDot className="h-3 w-3" />
+                    {data.flight_started ? "In flight" : "Scheduled"}
+                  </div>
+                  <div className="inline-flex items-center rounded-full bg-white/15 px-3 py-1 text-xs font-semibold">
+                    {typeLabel}
+                  </div>
                 </div>
               </div>
 
               <div className="mt-6">
                 <div className="font-display text-3xl font-bold">{data.passenger_name}</div>
-                <div className="mt-1 text-sm opacity-80">{new Date(data.flight_date).toDateString()}</div>
+                <div className="mt-1 text-sm opacity-80">{formatFlightDate(data.flight_date)}</div>
               </div>
 
               <div className="mt-8 space-y-5">
@@ -181,11 +193,13 @@ function TrackPage() {
                     <div className="flex-1">
                       <div className="text-[10px] uppercase tracking-widest opacity-70">From {s.depart_time ? `· ${s.depart_time}` : ""}</div>
                       <div className="font-display text-2xl font-bold">{s.from}</div>
+                      <div className="text-xs opacity-80">{findAirportByIata(s.from)?.name ?? ""}</div>
                     </div>
                     <ArrowRight className="h-6 w-6 opacity-70" />
                     <div className="flex-1 text-right">
                       <div className="text-[10px] uppercase tracking-widest opacity-70">To {s.arrival_time ? `· ${s.arrival_time}` : ""}</div>
                       <div className="font-display text-2xl font-bold">{s.to}</div>
+                      <div className="text-xs opacity-80">{findAirportByIata(s.to)?.name ?? ""}</div>
                     </div>
                   </div>
                 ))}
@@ -224,6 +238,7 @@ function TrackPage() {
               <Info icon={MapPin} label="Seat" value={data.seat} />
               <Info icon={DoorOpen} label="Gate" value={data.gate} />
               <Info icon={Ticket} label="Tracking code" value={data.tracking_code} mono />
+              <Info icon={Ticket} label="Amount" value={formatAmount(data.amount, flightMeta.currency)} />
             </div>
           </article>
         )}
@@ -235,11 +250,12 @@ function TrackPage() {
 const BoardingPass = ({ ref, data, seg, qrDataUrl }: any) => {
   const className = (data.class || "Economy").toUpperCase();
   const flightNo = data.flight_ticket || "—";
-  const dateShort = shortDate(data.flight_date);
+  const dateShort = shortFlightDate(data.flight_date);
+  const typeLabel = FLIGHT_TYPE_TRAVEL_LABEL[readFlightMeta(data.segments).flight_type];
   const seg0: Segment | undefined = seg;
   const fromIATA = seg0?.from || "—";
   const toIATA = seg0?.to || "—";
-  const cityName = (seg0?.to || data.passenger_name || "").toUpperCase();
+  const destCity = (findAirportByIata(seg0?.to ?? "")?.city || seg0?.to || data.passenger_name || "").toUpperCase();
   const boardingAt = stripColon(seg0?.boarding_at) || stripColon(data.depart_time);
   const gateClosesAt = stripColon(seg0?.gate_closes_at);
   const departure = stripColon(seg0?.depart_time) || stripColon(data.depart_time);
@@ -260,6 +276,7 @@ const BoardingPass = ({ ref, data, seg, qrDataUrl }: any) => {
             <div className="text-[36px] font-black leading-none tracking-tight">{className}</div>
             <div className="ml-auto text-right">
               <div className="text-[18px] font-semibold tracking-[0.2em]">BOARDING PASS</div>
+              <div className="mt-1 text-[11px] font-semibold tracking-[0.2em] text-neutral-500">{typeLabel.toUpperCase()}</div>
             </div>
           </div>
 
@@ -271,7 +288,7 @@ const BoardingPass = ({ ref, data, seg, qrDataUrl }: any) => {
 
           {/* city / flight / date row */}
           <div className="mt-4 grid grid-cols-12 items-end gap-4">
-            <div className="col-span-5 text-[32px] font-bold leading-none">{cityName}</div>
+            <div className="col-span-5 text-[32px] font-bold leading-none">{destCity}</div>
             <div className="col-span-3 text-[24px] font-bold leading-none">{flightNo}</div>
             <div className="col-span-4 text-[24px] font-bold leading-none">{dateShort}</div>
           </div>
@@ -372,8 +389,21 @@ async function loadImageDataUrl(url: string): Promise<string> {
 async function generateBookingPdf(data: any) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
   const margin = 40;
+  const contentW = pageW - margin * 2;
   let y = margin;
+
+  // Every block of text is wrapped to its column width and every section
+  // measures its own height, so nothing ever overlaps or runs off the page.
+  const wrap = (text: string, maxWidth: number): string[] =>
+    doc.splitTextToSize(text || "—", maxWidth) as string[];
+  const ensureSpace = (needed: number) => {
+    if (y + needed > pageH - margin) {
+      doc.addPage();
+      y = margin;
+    }
+  };
 
   try {
     const logo = await loadImageDataUrl(logoAsset.url);
@@ -399,20 +429,21 @@ async function generateBookingPdf(data: any) {
   doc.text("Booking Acknowledgement", margin, y);
   y += 22;
 
-  doc.setFillColor(255, 247, 237);
-  doc.setDrawColor(251, 191, 36);
-  doc.roundedRect(margin, y, pageW - margin * 2, 32, 4, 4, "FD");
+  const warning =
+    "! Please check your terminal and gate information with the airline directly at least 24 hours before departure.";
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
+  const warningLines = wrap(warning, contentW - 20);
+  const warningH = warningLines.length * 13 + 16;
+  doc.setFillColor(255, 247, 237);
+  doc.setDrawColor(251, 191, 36);
+  doc.roundedRect(margin, y, contentW, warningH, 4, 4, "FD");
   doc.setTextColor(120, 53, 15);
-  doc.text(
-    "! Please check your terminal and gate information with the airline directly at least 24 hours before departure.",
-    margin + 10,
-    y + 20,
-  );
+  warningLines.forEach((line, i) => doc.text(line, margin + 10, y + 20 + i * 13));
   doc.setTextColor(0);
-  y += 50;
+  y += warningH + 18;
 
+  ensureSpace(80);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
   doc.text("Flight Details", margin, y);
@@ -425,29 +456,45 @@ async function generateBookingPdf(data: any) {
   doc.text("Departing Flight", margin, y);
   y += 18;
 
-  const segments: Segment[] = (data.segments as Segment[]) || [];
-  const flightDate = new Date(data.flight_date).toDateString();
+  const segments: Segment[] = readSegments(data.segments);
+  const flightDate = formatFlightDate(data.flight_date);
+  const flightMeta = readFlightMeta(data.segments);
+  const flightType = flightMeta.flight_type;
+  const typeLabel = FLIGHT_TYPE_TRAVEL_LABEL[flightType];
+  const currency = flightMeta.currency;
 
   segments.forEach((seg, idx) => {
+    const fromText = airportLabel(seg.from);
+    const toText = airportLabel(seg.to);
+    const colW = (contentW - 24 - 40) / 3;
+    const col1 = margin + 12;
+    const col2 = col1 + colW + 20;
+    const col3 = col2 + colW + 20;
+    const fromLines = wrap(fromText, colW);
+    const toLines = wrap(toText, colW);
+    const routeLines = Math.max(fromLines.length, toLines.length);
+    // Header (3 lines) + date row + wrapped route names + time row + padding.
+    const boxH = 18 + 14 + 14 + 10 + 12 + routeLines * 16 + 16 + 12;
+
+    ensureSpace(boxH + 10);
     const boxTop = y;
     doc.setDrawColor(220);
-    doc.roundedRect(margin, boxTop, pageW - margin * 2, 110, 4, 4, "S");
+    doc.roundedRect(margin, boxTop, contentW, boxH, 4, 4, "S");
 
+    let by = boxTop + 18;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
-    doc.text("Emirates Airlines", margin + 12, boxTop + 18);
+    doc.text("Emirates Airlines", margin + 12, by);
+    by += 14;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    doc.text(`Flight ${data.flight_ticket || "—"}`, margin + 12, boxTop + 32);
+    doc.text(`Flight ${data.flight_ticket || "—"}`, margin + 12, by);
+    by += 14;
     doc.setTextColor(110);
-    doc.text("Nonstop  |  " + (data.class || "Economy"), margin + 12, boxTop + 46);
+    doc.text(`Nonstop  |  ${typeLabel} · ${data.class || "Economy"}`, margin + 12, by);
     doc.setTextColor(0);
 
-    const colY = boxTop + 66;
-    const col1 = margin + 12;
-    const col2 = margin + (pageW - margin * 2) / 2 - 20;
-    const col3 = pageW - margin - 110;
-
+    const colY = by + 22;
     doc.setFontSize(8);
     doc.setTextColor(110);
     doc.text(flightDate, col1, colY);
@@ -456,8 +503,8 @@ async function generateBookingPdf(data: any) {
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
-    doc.text(`${seg.from} - ${seg.depart_time || data.depart_time || ""}`, col1, colY + 18);
-    doc.text(`${seg.to} - ${seg.arrival_time || data.arrival_time || ""}`, col3, colY + 18);
+    fromLines.forEach((line, i) => doc.text(line, col1, colY + 18 + i * 16));
+    toLines.forEach((line, i) => doc.text(line, col3, colY + 18 + i * 16));
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
@@ -468,7 +515,12 @@ async function generateBookingPdf(data: any) {
     doc.setTextColor(0);
     doc.text(data.duration || "—", col2, colY + 22);
 
-    y = boxTop + 120;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.text(seg.depart_time || data.depart_time || "", col1, colY + 18 + routeLines * 16);
+    doc.text(seg.arrival_time || data.arrival_time || "", col3, colY + 18 + routeLines * 16);
+
+    y = boxTop + boxH + 10;
 
     if (idx < segments.length - 1) {
       doc.setDrawColor(220);
@@ -481,54 +533,61 @@ async function generateBookingPdf(data: any) {
     }
   });
 
-  y += 20;
+  y += 10;
 
-  if (y > 680) { doc.addPage(); y = margin; }
+  // Traveler Information — passenger name wraps inside its column.
+  ensureSpace(90);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
   doc.text("Traveler Information", margin, y);
   y += 8;
+  doc.setDrawColor(220);
   doc.line(margin, y, pageW - margin, y);
   y += 20;
 
-  const colWidths = [80, 140, 100, 80, 80];
+  const colWidths = [70, 155, 105, 75, 60];
   const headers = ["E-Ticket", "Passenger Name", "Tracking Code", "Seat", "Gate"];
-  let x = margin;
-  doc.setFillColor(245, 245, 245);
-  doc.rect(margin, y - 14, pageW - margin * 2, 22, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  headers.forEach((h, i) => {
-    doc.text(h, x + 6, y);
-    x += colWidths[i];
-  });
-  y += 14;
-
-  doc.setFont("helvetica", "normal");
-  x = margin;
-  const row = [
+  const rowCells = [
     "Booked",
     data.passenger_name || "—",
     data.tracking_code || "—",
     data.seat || "—",
     data.gate || "—",
   ];
-  row.forEach((c, i) => {
-    doc.text(String(c), x + 6, y);
+  const rowLines = rowCells.map((c, i) => wrap(String(c), colWidths[i] - 12));
+  const rowH = Math.max(...rowLines.map((l) => l.length)) * 12 + 12;
+
+  ensureSpace(rowH + 40);
+  doc.setFillColor(245, 245, 245);
+  doc.rect(margin, y - 14, contentW, 22, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  let x = margin;
+  headers.forEach((h, i) => {
+    doc.text(h, x + 6, y);
     x += colWidths[i];
   });
-  y += 24;
+  y += 8;
 
-  // Billing — uses amount from DB
+  doc.setFont("helvetica", "normal");
+  x = margin;
+  rowCells.forEach((c, i) => {
+    rowLines[i].forEach((line, j) => doc.text(line, x + 6, y + j * 12));
+    x += colWidths[i];
+  });
+  y += rowH + 12;
+
+  // Billing — in the currency the admin chose for this flight.
+  ensureSpace(130);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
-  doc.text("Billing Details (USD)", margin, y);
+  doc.text(`Billing Details (${currency})`, margin, y);
   y += 8;
+  doc.setDrawColor(220);
   doc.line(margin, y, pageW - margin, y);
   y += 20;
 
-  const amount = Number(data.amount ?? 0);
-  const amountStr = `$${amount.toFixed(2)}`;
+  const amountStr = formatAmount(data.amount, currency);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
@@ -552,7 +611,7 @@ async function generateBookingPdf(data: any) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(110);
-  doc.text("All fares are quoted in USD. Some airlines may charge Baggage Fees.", margin, y);
+  doc.text(`All fares are quoted in ${currency}. Some airlines may charge Baggage Fees.`, margin, y);
 
   doc.save(`emirates-booking-${data.tracking_code}.pdf`);
 }
