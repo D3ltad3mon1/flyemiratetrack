@@ -74,6 +74,7 @@ function TrackPage() {
   const { code } = Route.useParams();
   const boardingPassRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
@@ -100,16 +101,27 @@ function TrackPage() {
   const handleDownloadImage = async () => {
     if (!boardingPassRef.current) return;
     setDownloading(true);
+    setDownloadError(null);
     try {
       const canvas = await html2canvas(boardingPassRef.current, {
         backgroundColor: "#ffffff",
         scale: 3,
         useCORS: true,
       });
+      // JPG, as the ticket is a photo-style download.
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob((b) => resolve(b), "image/jpeg", 0.95),
+      );
+      if (!blob) throw new Error("Could not create the image file.");
+      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.download = `emirates-boarding-pass-${data?.tracking_code}.png`;
-      link.href = canvas.toDataURL("image/png");
+      link.download = `emirates-boarding-pass-${data?.tracking_code}.jpg`;
+      link.href = url;
       link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (err) {
+      console.error("Ticket download failed:", err);
+      setDownloadError("The ticket could not be downloaded. Please try again.");
     } finally {
       setDownloading(false);
     }
@@ -217,6 +229,9 @@ function TrackPage() {
                 {printing ? "Generating PDF…" : "Print flight ticket details"}
               </Button>
             </div>
+            {downloadError && (
+              <p className="mt-3 text-sm font-medium text-destructive">{downloadError}</p>
+            )}
 
             {/* Hidden printable boarding pass — styled to match sample */}
             <div className="mt-8 overflow-x-auto">
@@ -248,7 +263,10 @@ function TrackPage() {
 }
 
 const BoardingPass = ({ ref, data, seg, qrDataUrl }: any) => {
-  const className = (data.class || "Economy").toUpperCase();
+  // The class field sometimes holds the travel type ("Animal Travel") instead
+  // of a cabin class — show a cabin class here; the type has its own badge.
+  const rawClass = (data.class || "Economy").toUpperCase();
+  const className = rawClass === "HUMAN TRAVEL" || rawClass === "ANIMAL TRAVEL" ? "ECONOMY" : rawClass;
   const flightNo = data.flight_ticket || "—";
   const dateShort = shortFlightDate(data.flight_date);
   const typeLabel = FLIGHT_TYPE_TRAVEL_LABEL[readFlightMeta(data.segments).flight_type];
@@ -289,9 +307,9 @@ const BoardingPass = ({ ref, data, seg, qrDataUrl }: any) => {
             <div className="flex h-16 w-16 items-center justify-center bg-[#d71921]">
               <img src={EMIRATES_LOGO_DATA_URL} alt="Emirates" crossOrigin="anonymous" className="h-12 w-12 object-contain" />
             </div>
-            <div className="text-[28px] font-black leading-none tracking-tight">{className}</div>
+            <div className="whitespace-nowrap font-black leading-none tracking-tight" style={{ fontSize: fitSize(className, 28, 260) }}>{className}</div>
             <div className="ml-auto text-right">
-              <div className="text-[15px] font-semibold tracking-[0.2em]">BOARDING PASS</div>
+              <div className="whitespace-nowrap text-[15px] font-semibold tracking-[0.2em]">BOARDING PASS</div>
               <div className="mt-1 text-[10px] font-semibold tracking-[0.2em] text-neutral-500">{typeLabel.toUpperCase()}</div>
             </div>
           </div>
