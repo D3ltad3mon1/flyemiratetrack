@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { toJpeg } from "html-to-image";
 import jsPDF from "jspdf";
 import QRCode from "qrcode";
@@ -229,14 +229,16 @@ function TrackPage() {
               <p className="mt-3 text-sm font-medium text-destructive">{downloadError}</p>
             )}
 
-            {/* Hidden printable boarding pass — styled to match sample */}
-            <div className="mt-8 overflow-x-auto">
-              <BoardingPass
-                ref={boardingPassRef}
-                data={data}
-                seg={seg0}
-                qrDataUrl={qrDataUrl}
-              />
+            {/* Boarding pass — scaled to fit the screen so the whole pass shows */}
+            <div className="mt-8">
+              <ScaledPass>
+                <BoardingPass
+                  ref={boardingPassRef}
+                  data={data}
+                  seg={seg0}
+                  qrDataUrl={qrDataUrl}
+                />
+              </ScaledPass>
             </div>
 
             {/* Details grid */}
@@ -253,6 +255,37 @@ function TrackPage() {
             </div>
           </article>
         )}
+      </div>
+    </div>
+  );
+}
+
+// The pass is 980px wide; on narrower screens scale it down so the whole
+// pass — including the detachable stub — is visible without sideways scrolling.
+// The scale lives on this wrapper only, so the ticket download still captures
+// the pass at its full 980px size.
+function ScaledPass({ children }: { children: ReactNode }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const [contentH, setContentH] = useState(0);
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const cw = containerRef.current?.clientWidth ?? 0;
+      const ch = contentRef.current?.offsetHeight ?? 0;
+      if (cw > 0) setScale(Math.min(1, cw / 980));
+      if (ch > 0) setContentH(ch);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+
+  return (
+    <div ref={containerRef} style={{ height: contentH * scale || undefined, overflow: "hidden" }}>
+      <div ref={contentRef} style={{ transform: `scale(${scale})`, transformOrigin: "top left", width: 980 }}>
+        {children}
       </div>
     </div>
   );
