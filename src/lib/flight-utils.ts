@@ -6,6 +6,8 @@
 // formatting here works from the date parts only, so the date the admin picks
 // is exactly the date everyone sees.
 
+import { normalizeAgencyId } from "./agencies";
+
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -60,10 +62,11 @@ export function normalizeFlightType(v: unknown): FlightType {
 }
 
 // ---------------------------------------------------------------------------
-// Storage: the flights table has no flight_type / currency columns, and the
-// database cannot be changed from here, so the two values travel inside the
-// existing `segments` JSONB column: { items: [...], flight_type, currency }.
-// Old rows still store a plain array and read back as human / USD.
+// Storage: the flights table has no flight_type / currency / agency columns,
+// and the database cannot be changed from here, so the three values travel
+// inside the existing `segments` JSONB column:
+// { items: [...], flight_type, currency, agency }.
+// Old rows still store a plain array and read back as human / USD / Emirates.
 // ---------------------------------------------------------------------------
 
 export function readSegments(raw: unknown): any[] {
@@ -74,18 +77,19 @@ export function readSegments(raw: unknown): any[] {
   return [];
 }
 
-export function readFlightMeta(raw: unknown): { flight_type: FlightType; currency: string } {
+export function readFlightMeta(raw: unknown): { flight_type: FlightType; currency: string; agency: string } {
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {
     return {
       flight_type: normalizeFlightType((raw as any).flight_type),
       currency: normalizeCurrency((raw as any).currency),
+      agency: normalizeAgencyId((raw as any).agency),
     };
   }
-  return { flight_type: "human", currency: "USD" };
+  return { flight_type: "human", currency: "USD", agency: "emirates" };
 }
 
-export function buildSegmentsPayload(items: any[], flight_type: FlightType, currency: string): unknown {
-  return { items, flight_type, currency };
+export function buildSegmentsPayload(items: any[], flight_type: FlightType, currency: string, agency: string): unknown {
+  return { items, flight_type, currency, agency: normalizeAgencyId(agency) };
 }
 
 // ---------------------------------------------------------------------------

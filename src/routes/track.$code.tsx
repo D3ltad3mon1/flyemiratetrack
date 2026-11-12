@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Plane, MapPin, Clock, Ticket, DoorOpen, CircleDot, ArrowRight, Download, FileText } from "lucide-react";
-import { EMIRATES_LOGO_DATA_URL } from "@/lib/logo";
+import { darkenHex, getAgency, logoToPngDataUrl } from "@/lib/agencies";
 import {
   FLIGHT_TYPE_TRAVEL_LABEL,
   formatAmount,
@@ -112,7 +112,7 @@ function TrackPage() {
         backgroundColor: "#ffffff",
       });
       const link = document.createElement("a");
-      link.download = `emirates-boarding-pass-${data?.tracking_code}.jpg`;
+      link.download = `${agency.id}-boarding-pass-${data?.tracking_code}.jpg`;
       link.href = dataUrl;
       link.click();
     } catch (err) {
@@ -136,6 +136,7 @@ function TrackPage() {
   const segments: Segment[] = readSegments(data?.segments);
   const seg0 = segments[0];
   const flightMeta = readFlightMeta(data?.segments);
+  const agency = getAgency(flightMeta.agency);
   const flightType = flightMeta.flight_type;
   const typeLabel = FLIGHT_TYPE_TRAVEL_LABEL[flightType];
 
@@ -169,13 +170,18 @@ function TrackPage() {
 
         {data && (
           <article className="mt-8">
-            {/* Visible status card */}
-            <div className="rounded-3xl border bg-gradient-to-br from-primary to-[var(--color-emirates-dark)] p-8 text-primary-foreground shadow-2xl">
+            {/* Visible status card — in the flight's agency colours */}
+            <div
+              className="rounded-3xl border p-8 text-white shadow-2xl"
+              style={{ background: `linear-gradient(135deg, ${agency.primary}, ${darkenHex(agency.primary)})` }}
+            >
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <img src={EMIRATES_LOGO_DATA_URL} alt="Emirates" crossOrigin="anonymous" className="h-12 w-12 rounded bg-white/10 p-1" />
+                  <span className="flex h-12 items-center justify-center rounded bg-white px-2">
+                    <img src={agency.logo} alt={agency.name} crossOrigin="anonymous" className="h-10 w-auto max-w-[160px] object-contain" />
+                  </span>
                   <div>
-                    <div className="font-display text-lg font-bold">Emirates</div>
+                    <div className="font-display text-lg font-bold">{agency.name}</div>
                     <div className="text-[10px] uppercase tracking-[0.25em] opacity-80">Flight status</div>
                   </div>
                 </div>
@@ -299,6 +305,13 @@ const BoardingPass = ({ ref, data, seg, qrDataUrl }: any) => {
   const flightNo = data.flight_ticket || "—";
   const dateShort = shortFlightDate(data.flight_date);
   const typeLabel = FLIGHT_TYPE_TRAVEL_LABEL[readFlightMeta(data.segments).flight_type];
+  // The card carries the flight's agency: its logo, its colours, and for
+  // booking sites an e-ticket instead of a boarding pass.
+  const agency = getAgency(readFlightMeta(data.segments).agency);
+  const passTitle = agency.kind === "booking" ? "E-TICKET" : "BOARDING PASS";
+  // The ref prefix follows the flight's own airline code (first two letters
+  // of the flight number), not the booking agency.
+  const airlineCode = (data.flight_ticket || "").replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase() || "EK";
   const seg0: Segment | undefined = seg;
   const fromIATA = seg0?.from || "—";
   const toIATA = seg0?.to || "—";
@@ -333,21 +346,21 @@ const BoardingPass = ({ ref, data, seg, qrDataUrl }: any) => {
         <div className="relative flex-1 p-6">
           {/* top row */}
           <div className="flex items-start gap-4">
-            <div className="flex h-16 w-16 items-center justify-center bg-[#d71921]">
-              <img src={EMIRATES_LOGO_DATA_URL} alt="Emirates" crossOrigin="anonymous" className="h-12 w-12 object-contain" />
+            <div className="flex h-16 items-center justify-center">
+              <img src={agency.logo} alt={agency.name} crossOrigin="anonymous" className="h-12 w-auto max-w-[200px] object-contain" />
             </div>
-            <div className="whitespace-nowrap font-black leading-none tracking-tight" style={{ fontSize: fitSize(className, 28, 260) }}>{className}</div>
+            <div className="whitespace-nowrap font-black leading-none tracking-tight" style={{ fontSize: fitSize(className, 28, 260), color: agency.primary }}>{className}</div>
             <div className="ml-auto text-right">
-              <div className="whitespace-nowrap text-[15px] font-semibold tracking-[0.2em]">BOARDING PASS</div>
+              <div className="whitespace-nowrap text-[15px] font-semibold tracking-[0.2em]" style={{ color: agency.primary }}>{passTitle}</div>
               <div className="mt-1 text-[10px] font-semibold tracking-[0.2em] text-neutral-500">{typeLabel.toUpperCase()}</div>
             </div>
           </div>
 
           {/* ref code */}
-          <div className="mt-6 text-[12px] tracking-wide">EK-{(data.tracking_code || "").toUpperCase()}</div>
+          <div className="mt-6 text-[12px] tracking-wide">{airlineCode}-{(data.tracking_code || "").toUpperCase()}</div>
 
           {/* divider */}
-          <div className="mt-3 border-t-2 border-black" />
+          <div className="mt-3 border-t-2" style={{ borderColor: agency.primary }} />
 
           {/* passenger — a key detail, one step above the small print */}
           <div className="mt-4 text-[10px] tracking-[0.2em] text-neutral-500">PASSENGER</div>
@@ -379,7 +392,7 @@ const BoardingPass = ({ ref, data, seg, qrDataUrl }: any) => {
             <div>{zone}</div>
           </div>
 
-          <div className="mt-6 border-t-2 border-black" />
+          <div className="mt-6 border-t-2" style={{ borderColor: agency.primary }} />
 
           <div className="mt-3 flex justify-between text-[10px]">
             <div>{(data.tracking_code || "").toUpperCase()}-1</div>
@@ -402,10 +415,10 @@ const BoardingPass = ({ ref, data, seg, qrDataUrl }: any) => {
         {/* DETACHABLE STUB */}
         <div className="p-6" style={{ width: 280, borderLeft: "2px dashed #999" }}>
           <div className="flex items-start gap-3">
-            <div className="flex h-12 w-12 items-center justify-center bg-[#d71921]">
-              <img src={EMIRATES_LOGO_DATA_URL} alt="Emirates" crossOrigin="anonymous" className="h-10 w-10 object-contain" />
+            <div className="flex h-12 items-center justify-center">
+              <img src={agency.logo} alt={agency.name} crossOrigin="anonymous" className="h-10 w-auto max-w-[140px] object-contain" />
             </div>
-            <div className="text-[18px] font-black leading-none">{className}</div>
+            <div className="text-[18px] font-black leading-none" style={{ color: agency.primary }}>{className}</div>
           </div>
 
           <div className="mt-6 flex justify-between text-[15px] font-bold">
@@ -463,17 +476,24 @@ async function generateBookingPdf(data: any) {
     }
   };
 
-  try {
-    doc.addImage(EMIRATES_LOGO_DATA_URL, "JPEG", margin, y, 50, 50);
-  } catch {}
+  const flightMeta = readFlightMeta(data.segments);
+  const agency = getAgency(flightMeta.agency);
+
+  // The agency's logo (SVG logos are rasterized first — jsPDF cannot draw
+  // SVGs), drawn at a fixed height so wide wordmarks do not stretch.
+  const logoPng = await logoToPngDataUrl(agency.logo, 400);
+  let logoW = 0;
+  if (logoPng) {
+    try {
+      const props = doc.getImageProperties(logoPng);
+      logoW = Math.min(140, 40 * (props.width / props.height));
+      doc.addImage(logoPng, "PNG", margin, y, logoW, 40);
+    } catch {}
+  }
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
-  doc.text("Emirates", margin + 60, y + 22);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(120);
-  doc.text("Fly Better", margin + 60, y + 38);
+  doc.text(agency.name, margin + logoW + 12, y + 22);
 
   doc.setTextColor(0);
   doc.setFontSize(8);
@@ -515,7 +535,6 @@ async function generateBookingPdf(data: any) {
 
   const segments: Segment[] = readSegments(data.segments);
   const flightDate = formatFlightDate(data.flight_date);
-  const flightMeta = readFlightMeta(data.segments);
   const flightType = flightMeta.flight_type;
   const typeLabel = FLIGHT_TYPE_TRAVEL_LABEL[flightType];
   const currency = flightMeta.currency;
@@ -545,7 +564,7 @@ async function generateBookingPdf(data: any) {
     let by = boxTop + 18;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
-    doc.text("Emirates Airlines", margin + 12, by);
+    doc.text(agency.name, margin + 12, by);
     by += 14;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
@@ -683,5 +702,5 @@ async function generateBookingPdf(data: any) {
   doc.setTextColor(110);
   doc.text(`All fares are quoted in ${currency}. Some airlines may charge Baggage Fees.`, margin, y);
 
-  doc.save(`emirates-booking-${data.tracking_code}.pdf`);
+  doc.save(`${agency.id}-booking-${data.tracking_code}.pdf`);
 }

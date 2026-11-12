@@ -22,6 +22,7 @@ import {
   findAirportByIata,
   getAirportsByCountry,
 } from "@/lib/airports";
+import { AGENCY_GROUPS, getAgency } from "@/lib/agencies";
 
 export const Route = createFileRoute("/admin")({
   component: AdminPage,
@@ -75,6 +76,7 @@ const emptyForm = {
   amount: "",
   flight_type: "human" as FlightType,
   currency: "USD",
+  agency: "emirates",
 };
 
 function AdminPage() {
@@ -144,6 +146,7 @@ function AdminPage() {
       amount: f.amount != null ? String(f.amount) : "",
       flight_type: meta.flight_type,
       currency: meta.currency,
+      agency: meta.agency,
     });
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -164,12 +167,14 @@ function AdminPage() {
         passenger_name: form.passenger_name.trim(),
         flight_date: form.flight_date,
         flight_ticket: form.flight_ticket || null,
-        // Flight type + currency travel inside the segments JSONB value
-        // (see buildSegmentsPayload) — the flights table has no columns for them.
+        // Flight type + currency + agency travel inside the segments JSONB
+        // value (see buildSegmentsPayload) — the flights table has no
+        // columns for them.
         segments: buildSegmentsPayload(
           form.segments.filter((s) => s.from || s.to),
           form.flight_type,
           form.currency,
+          form.agency,
         ) as Json,
         depart_time: form.depart_time || null,
         arrival_time: form.arrival_time || null,
@@ -276,6 +281,12 @@ function AdminPage() {
                 onChange={(v) => setForm({ ...form, currency: v })}
                 options={CURRENCIES.map((c) => ({ value: c.code, label: c.name }))}
               />
+              <div className="sm:col-span-2">
+                <AgencyField
+                  value={form.agency}
+                  onChange={(v) => setForm({ ...form, agency: v })}
+                />
+              </div>
             </div>
 
             <div className="mt-6">
@@ -375,6 +386,7 @@ function FlightGroup({ title, flights, onEdit, onRemove }: {
                 <div className="text-xs text-muted-foreground">
                   {readSegments(f.segments).map((s) => `${s.from}→${s.to}`).join(" • ") || "—"} · {formatFlightDate(f.flight_date)} · {f.flight_started ? "In flight" : "Scheduled"}
                   {f.amount != null && <> · {formatAmount(f.amount, meta.currency)}</>}
+                  {" · "}{getAgency(meta.agency).name}
                 </div>
               </div>
               <div className="flex gap-2">
@@ -386,6 +398,43 @@ function FlightGroup({ title, flights, onEdit, onRemove }: {
           })}
         </ul>
       )}
+    </div>
+  );
+}
+
+function AgencyField({ value, onChange }: {
+  value: string; onChange: (v: string) => void;
+}) {
+  const agency = getAgency(value);
+  return (
+    <div>
+      <label className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Booking agency</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="mt-1 w-full rounded-lg border bg-background px-3 py-2.5 outline-none focus:ring-2 focus:ring-primary/40"
+      >
+        {AGENCY_GROUPS.map((g) => (
+          <optgroup key={g.name} label={g.name}>
+            {g.agencies.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      {/* Preview: the card and PDF will carry this agency's logo and colours. */}
+      <div className="mt-2 flex items-center gap-3 rounded-lg border bg-background px-3 py-2">
+        <span className="flex h-10 items-center justify-center">
+          <img src={agency.logo} alt={agency.name} className="h-10 w-auto max-w-[160px] object-contain" />
+        </span>
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold" style={{ color: agency.primary }}>{agency.name}</div>
+          <div className="text-xs text-muted-foreground">
+            {agency.kind === "booking" ? "Booking site — e-ticket style card" : "Airline — boarding pass card"}
+          </div>
+        </div>
+        <span className="ml-auto h-5 w-5 shrink-0 rounded-full border" style={{ backgroundColor: agency.primary }} title={agency.primary} />
+      </div>
     </div>
   );
 }
