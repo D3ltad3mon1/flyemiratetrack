@@ -262,6 +262,22 @@ const BoardingPass = ({ ref, data, seg, qrDataUrl }: any) => {
   const seat = data.seat || "—";
   const zone = seg0?.seating_zone || "C";
   const gate = data.gate || "—";
+  const passengerName = (data.passenger_name || "—").toUpperCase();
+
+  // Text is sized to fit its column: estimate bold Arial at ~0.62em per
+  // character and shrink until it fits, so values never run into each other.
+  const fitSize = (text: string, base: number, maxW: number) => {
+    const est = Math.max(1, text.length) * base * 0.62;
+    if (est <= maxW) return base;
+    return Math.max(10, Math.floor((base * maxW) / est));
+  };
+  // One shared size per values row, so the row stays even.
+  const mainValues = [gate, boardingAt || "—", gateClosesAt || "—", seat, zone];
+  const mainValueSize = Math.min(...mainValues.map((v) => fitSize(v, 22, 80)));
+  const stubValues = [departure || "—", seat, zone];
+  const stubValueSize = Math.min(...stubValues.map((v) => fitSize(v, 17, 68)));
+  const placeSize = fitSize(destCity, 26, 480);
+  const nameSize = fitSize(passengerName, 18, 480);
 
   return (
     <div ref={ref} className="mx-auto bg-white text-black" style={{ width: 980, fontFamily: "Arial, Helvetica, sans-serif" }}>
@@ -273,36 +289,42 @@ const BoardingPass = ({ ref, data, seg, qrDataUrl }: any) => {
             <div className="flex h-16 w-16 items-center justify-center bg-[#d71921]">
               <img src={logoAsset.url} alt="Emirates" crossOrigin="anonymous" className="h-12 w-12 object-contain" />
             </div>
-            <div className="text-[36px] font-black leading-none tracking-tight">{className}</div>
+            <div className="text-[28px] font-black leading-none tracking-tight">{className}</div>
             <div className="ml-auto text-right">
-              <div className="text-[18px] font-semibold tracking-[0.2em]">BOARDING PASS</div>
-              <div className="mt-1 text-[11px] font-semibold tracking-[0.2em] text-neutral-500">{typeLabel.toUpperCase()}</div>
+              <div className="text-[15px] font-semibold tracking-[0.2em]">BOARDING PASS</div>
+              <div className="mt-1 text-[10px] font-semibold tracking-[0.2em] text-neutral-500">{typeLabel.toUpperCase()}</div>
             </div>
           </div>
 
           {/* ref code */}
-          <div className="mt-6 text-[13px] tracking-wide">EK-{(data.tracking_code || "").toUpperCase()}</div>
+          <div className="mt-6 text-[12px] tracking-wide">EK-{(data.tracking_code || "").toUpperCase()}</div>
 
           {/* divider */}
           <div className="mt-3 border-t-2 border-black" />
 
-          {/* city / flight / date row */}
-          <div className="mt-4 grid grid-cols-12 items-end gap-4">
-            <div className="col-span-5 text-[32px] font-bold leading-none">{destCity}</div>
-            <div className="col-span-3 text-[24px] font-bold leading-none">{flightNo}</div>
-            <div className="col-span-4 text-[24px] font-bold leading-none">{dateShort}</div>
+          {/* passenger — a key detail, one step above the small print */}
+          <div className="mt-4 text-[10px] tracking-[0.2em] text-neutral-500">PASSENGER</div>
+          <div className="mt-1 font-bold leading-tight" style={{ fontSize: nameSize }}>{passengerName}</div>
+
+          {/* destination place — the biggest detail on the pass */}
+          <div className="mt-4 font-bold leading-none" style={{ fontSize: placeSize }}>{destCity}</div>
+
+          {/* flight / date row */}
+          <div className="mt-3 flex items-end gap-6">
+            <div className="text-[20px] font-bold leading-none">{flightNo}</div>
+            <div className="text-[20px] font-bold leading-none">{dateShort}</div>
           </div>
 
           {/* labels row */}
-          <div className="mt-6 grid grid-cols-5 gap-4 text-[11px]">
+          <div className="mt-6 grid grid-cols-5 gap-4 text-[10px]">
             <div>Gate</div>
             <div>Boarding at</div>
             <div>Gate closes at</div>
             <div>Seat</div>
             <div>Seating Zone</div>
           </div>
-          {/* values row */}
-          <div className="mt-1 grid grid-cols-5 gap-4 text-[34px] font-black leading-none">
+          {/* values row — one shared size, shrunk to fit the narrow columns */}
+          <div className="mt-1 grid grid-cols-5 gap-4 font-black leading-none" style={{ fontSize: mainValueSize }}>
             <div>{gate}</div>
             <div>{boardingAt || "—"}</div>
             <div>{gateClosesAt || "—"}</div>
@@ -312,7 +334,7 @@ const BoardingPass = ({ ref, data, seg, qrDataUrl }: any) => {
 
           <div className="mt-6 border-t-2 border-black" />
 
-          <div className="mt-3 flex justify-between text-[11px]">
+          <div className="mt-3 flex justify-between text-[10px]">
             <div>{(data.tracking_code || "").toUpperCase()}-1</div>
             <div>Seq 413</div>
           </div>
@@ -336,28 +358,28 @@ const BoardingPass = ({ ref, data, seg, qrDataUrl }: any) => {
             <div className="flex h-12 w-12 items-center justify-center bg-[#d71921]">
               <img src={logoAsset.url} alt="Emirates" crossOrigin="anonymous" className="h-10 w-10 object-contain" />
             </div>
-            <div className="text-[22px] font-black leading-none">{className}</div>
+            <div className="text-[18px] font-black leading-none">{className}</div>
           </div>
 
-          <div className="mt-6 flex justify-between text-[18px] font-bold">
+          <div className="mt-6 flex justify-between text-[15px] font-bold">
             <div>{flightNo}</div>
             <div>{dateShort}</div>
           </div>
 
-          <div className="mt-4 text-[18px] font-bold">{fromIATA} - {toIATA}</div>
+          <div className="mt-4 text-[15px] font-bold">{fromIATA} - {toIATA}</div>
 
-          <div className="mt-6 grid grid-cols-3 gap-2 text-[10px]">
+          <div className="mt-6 grid grid-cols-3 gap-2 text-[9px]">
             <div>Departure</div>
             <div>Seat</div>
             <div>Seating Zone</div>
           </div>
-          <div className="mt-1 grid grid-cols-3 gap-2 text-[24px] font-black leading-none">
+          <div className="mt-1 grid grid-cols-3 gap-2 font-black leading-none" style={{ fontSize: stubValueSize }}>
             <div>{departure || "—"}</div>
             <div>{seat}</div>
             <div>{zone}</div>
           </div>
 
-          <div className="mt-10 text-[11px]">Seq 413</div>
+          <div className="mt-10 text-[10px]">Seq 413</div>
         </div>
       </div>
     </div>
@@ -411,48 +433,48 @@ async function generateBookingPdf(data: any) {
   } catch {}
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
+  doc.setFontSize(18);
   doc.text("Emirates", margin + 60, y + 22);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
+  doc.setFontSize(9);
   doc.setTextColor(120);
   doc.text("Fly Better", margin + 60, y + 38);
 
   doc.setTextColor(0);
-  doc.setFontSize(9);
+  doc.setFontSize(8);
   doc.text(`Booked On: ${new Date().toDateString()}`, pageW - margin, y + 22, { align: "right" });
 
   y += 70;
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
+  doc.setFontSize(19);
   doc.text("Booking Acknowledgement", margin, y);
   y += 22;
 
   const warning =
     "! Please check your terminal and gate information with the airline directly at least 24 hours before departure.";
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
+  doc.setFontSize(8);
   const warningLines = wrap(warning, contentW - 20);
-  const warningH = warningLines.length * 13 + 16;
+  const warningH = warningLines.length * 12 + 16;
   doc.setFillColor(255, 247, 237);
   doc.setDrawColor(251, 191, 36);
   doc.roundedRect(margin, y, contentW, warningH, 4, 4, "FD");
   doc.setTextColor(120, 53, 15);
-  warningLines.forEach((line, i) => doc.text(line, margin + 10, y + 20 + i * 13));
+  warningLines.forEach((line, i) => doc.text(line, margin + 10, y + 19 + i * 12));
   doc.setTextColor(0);
   y += warningH + 18;
 
   ensureSpace(80);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(15);
+  doc.setFontSize(13);
   doc.text("Flight Details", margin, y);
   y += 8;
   doc.setDrawColor(220);
   doc.line(margin, y, pageW - margin, y);
   y += 18;
 
-  doc.setFontSize(12);
+  doc.setFontSize(11);
   doc.text("Departing Flight", margin, y);
   y += 18;
 
@@ -470,6 +492,10 @@ async function generateBookingPdf(data: any) {
     const col1 = margin + 12;
     const col2 = col1 + colW + 20;
     const col3 = col2 + colW + 20;
+    // Measure the route names at the size they are drawn at (11pt bold),
+    // or the wrap is computed too small and long names run off the box.
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
     const fromLines = wrap(fromText, colW);
     const toLines = wrap(toText, colW);
     const routeLines = Math.max(fromLines.length, toLines.length);
@@ -483,11 +509,11 @@ async function generateBookingPdf(data: any) {
 
     let by = boxTop + 18;
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.text("Emirates Airlines", margin + 12, by);
     by += 14;
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     doc.text(`Flight ${data.flight_ticket || "—"}`, margin + 12, by);
     by += 14;
     doc.setTextColor(110);
@@ -502,7 +528,7 @@ async function generateBookingPdf(data: any) {
     doc.setTextColor(0);
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
+    doc.setFontSize(11);
     fromLines.forEach((line, i) => doc.text(line, col1, colY + 18 + i * 16));
     toLines.forEach((line, i) => doc.text(line, col3, colY + 18 + i * 16));
 
@@ -511,12 +537,12 @@ async function generateBookingPdf(data: any) {
     doc.setTextColor(110);
     doc.text("Travel Time:", col2, colY + 8);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.setTextColor(0);
     doc.text(data.duration || "—", col2, colY + 22);
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.text(seg.depart_time || data.depart_time || "", col1, colY + 18 + routeLines * 16);
     doc.text(seg.arrival_time || data.arrival_time || "", col3, colY + 18 + routeLines * 16);
 
@@ -538,7 +564,7 @@ async function generateBookingPdf(data: any) {
   // Traveler Information — passenger name wraps inside its column.
   ensureSpace(90);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(15);
+  doc.setFontSize(13);
   doc.text("Traveler Information", margin, y);
   y += 8;
   doc.setDrawColor(220);
@@ -554,33 +580,42 @@ async function generateBookingPdf(data: any) {
     data.seat || "—",
     data.gate || "—",
   ];
-  const rowLines = rowCells.map((c, i) => wrap(String(c), colWidths[i] - 12));
-  const rowH = Math.max(...rowLines.map((l) => l.length)) * 12 + 12;
-
-  ensureSpace(rowH + 40);
-  doc.setFillColor(245, 245, 245);
-  doc.rect(margin, y - 14, contentW, 22, "F");
-  doc.setFont("helvetica", "bold");
+  // Measure the values at the size they are drawn at (9pt normal).
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
+  const rowLines = rowCells.map((c, i) => wrap(String(c), colWidths[i] - 12));
+  const rowLinesCount = Math.max(...rowLines.map((l) => l.length));
+
+  ensureSpace(rowLinesCount * 12 + 60);
+  // The grey band holds the headers only; the values sit below it on their
+  // own lines, so nothing overlaps or gets clipped.
+  const bandTop = y - 14;
+  const bandH = 22;
+  doc.setFillColor(245, 245, 245);
+  doc.rect(margin, bandTop, contentW, bandH, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
   let x = margin;
   headers.forEach((h, i) => {
-    doc.text(h, x + 6, y);
+    doc.text(h, x + 6, bandTop + 14);
     x += colWidths[i];
   });
-  y += 8;
 
+  // Values: one step bigger than the headers, as the key details.
+  const dataTop = bandTop + bandH + 13;
   doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
   x = margin;
   rowCells.forEach((c, i) => {
-    rowLines[i].forEach((line, j) => doc.text(line, x + 6, y + j * 12));
+    rowLines[i].forEach((line, j) => doc.text(line, x + 6, dataTop + j * 12));
     x += colWidths[i];
   });
-  y += rowH + 12;
+  y = dataTop + (rowLinesCount - 1) * 12 + 18;
 
   // Billing — in the currency the admin chose for this flight.
   ensureSpace(130);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(15);
+  doc.setFontSize(13);
   doc.text(`Billing Details (${currency})`, margin, y);
   y += 8;
   doc.setDrawColor(220);
@@ -590,7 +625,7 @@ async function generateBookingPdf(data: any) {
   const amountStr = formatAmount(data.amount, currency);
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
+  doc.setFontSize(9);
   const rows: [string, string][] = [
     ["1 Adult Ticket", amountStr],
     ["Subtotal", amountStr],
@@ -604,7 +639,7 @@ async function generateBookingPdf(data: any) {
 
   y += 8;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
+  doc.setFontSize(11);
   doc.text(`Total Charge: ${amountStr}`, margin, y);
   y += 24;
 
