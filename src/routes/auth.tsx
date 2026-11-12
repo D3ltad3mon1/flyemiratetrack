@@ -9,7 +9,7 @@ export const Route = createFileRoute("/auth")({
 });
 
 const ADMIN_USERNAME = "D3LTAD3MON";
-const ADMIN_PASSWORD = "D3ltad3mon";
+// No password lives in this code any more. The admin types it here and Supabase Auth checks it;
 const ADMIN_EMAIL = "d3ltad3mon@admin.local";
 
 function AuthPage() {
@@ -28,13 +28,13 @@ function AuthPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
+      if (username !== ADMIN_USERNAME) {
         toast.error("Invalid credentials");
         return;
       }
       const { error } = await supabase.auth.signInWithPassword({
         email: ADMIN_EMAIL,
-        password: ADMIN_PASSWORD,
+        password: password,
       });
       if (error) throw error;
       navigate({ to: "/admin" });
