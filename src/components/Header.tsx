@@ -1,12 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import logoAsset from "@/assets/emirates-logo.png.asset.json";
+import { EMIRATES_LOGO_DATA_URL } from "@/lib/logo";
 
 export function Header() {
   return (
     <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-xl">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <Link to="/" className="flex items-center gap-3">
-          <img src={logoAsset.url} alt="Emirates" className="h-10 w-10 rounded" />
+          <img src={EMIRATES_LOGO_DATA_URL} alt="Emirates" className="h-10 w-10 rounded" />
           <div className="leading-tight">
             <div className="font-display text-xl font-bold tracking-tight">Emirates</div>
             <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Fly Better</div>

@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Plane, MapPin, Clock, Ticket, DoorOpen, CircleDot, ArrowRight, Download, FileText } from "lucide-react";
-import logoAsset from "@/assets/emirates-logo.png.asset.json";
+import { EMIRATES_LOGO_DATA_URL } from "@/lib/logo";
 import {
   FLIGHT_TYPE_TRAVEL_LABEL,
   formatAmount,
@@ -165,7 +165,7 @@ function TrackPage() {
             <div className="rounded-3xl border bg-gradient-to-br from-primary to-[var(--color-emirates-dark)] p-8 text-primary-foreground shadow-2xl">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <img src={logoAsset.url} alt="Emirates" crossOrigin="anonymous" className="h-12 w-12 rounded bg-white/10 p-1" />
+                  <img src={EMIRATES_LOGO_DATA_URL} alt="Emirates" crossOrigin="anonymous" className="h-12 w-12 rounded bg-white/10 p-1" />
                   <div>
                     <div className="font-display text-lg font-bold">Emirates</div>
                     <div className="text-[10px] uppercase tracking-[0.25em] opacity-80">Flight status</div>
@@ -287,7 +287,7 @@ const BoardingPass = ({ ref, data, seg, qrDataUrl }: any) => {
           {/* top row */}
           <div className="flex items-start gap-4">
             <div className="flex h-16 w-16 items-center justify-center bg-[#d71921]">
-              <img src={logoAsset.url} alt="Emirates" crossOrigin="anonymous" className="h-12 w-12 object-contain" />
+              <img src={EMIRATES_LOGO_DATA_URL} alt="Emirates" crossOrigin="anonymous" className="h-12 w-12 object-contain" />
             </div>
             <div className="text-[28px] font-black leading-none tracking-tight">{className}</div>
             <div className="ml-auto text-right">
@@ -356,7 +356,7 @@ const BoardingPass = ({ ref, data, seg, qrDataUrl }: any) => {
         <div className="p-6" style={{ width: 280, borderLeft: "2px dashed #999" }}>
           <div className="flex items-start gap-3">
             <div className="flex h-12 w-12 items-center justify-center bg-[#d71921]">
-              <img src={logoAsset.url} alt="Emirates" crossOrigin="anonymous" className="h-10 w-10 object-contain" />
+              <img src={EMIRATES_LOGO_DATA_URL} alt="Emirates" crossOrigin="anonymous" className="h-10 w-10 object-contain" />
             </div>
             <div className="text-[18px] font-black leading-none">{className}</div>
           </div>
@@ -397,17 +397,6 @@ function Info({ icon: Icon, label, value, mono }: { icon: any; label: string; va
   );
 }
 
-async function loadImageDataUrl(url: string): Promise<string> {
-  const res = await fetch(url);
-  const blob = await res.blob();
-  return await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
-
 async function generateBookingPdf(data: any) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
@@ -428,8 +417,7 @@ async function generateBookingPdf(data: any) {
   };
 
   try {
-    const logo = await loadImageDataUrl(logoAsset.url);
-    doc.addImage(logo, "PNG", margin, y, 50, 50);
+    doc.addImage(EMIRATES_LOGO_DATA_URL, "JPEG", margin, y, 50, 50);
   } catch {}
 
   doc.setFont("helvetica", "bold");
